@@ -14,7 +14,7 @@
 
 #### 第二部分 Java并发编程高级篇
 
-- ~~[第3章 Java并发包中的ThreadLocalRandom类原理剖析](/03Java并发包中的ThreadLocalRandom类原理剖析.md)~~
+- [第3章 Java并发包中的ThreadLocalRandom类原理剖析](/03Java并发包中的ThreadLocalRandom类原理剖析.md)
 
 - ~~[第4章 Java并发包中原子操作类原理剖析](/04Java并发包中原子操作类原理剖析.md)~~
 
