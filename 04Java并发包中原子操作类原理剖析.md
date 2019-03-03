@@ -86,7 +86,138 @@ AtomicLong使用CAS非阻塞算法，性能比使用synchronized等的阻塞算�
 
 ## JDK8中新增的原子操作类LongAdder
 
-由上可知，AtomicLong的性能瓶颈是多个线程同时去竞争一个变量的更新权导致的，而LongAdder通过将一个变量分解成多个变量，让同样多的线程去竞争多个资源解决了此问题。
+由上可知，AtomicLong的性能瓶颈是多个线程同时去竞争一个变量的更新权导致的。而LongAdder通过将一个变量分解成多个变量，让同样多的线程去竞争多个资源解决了此问题。
+
+### 原理
+
+![](images/03.png)
+
+如图，LongAdder内部维护了多个Cell，每个Cell内部有一个初始值为0的long类型变量，这样，在同等并发下，对单个变量的争夺会变少。此外，多个线程争夺同一个变量失败时，会到另一个Cell上去尝试，增加了重试成功的可能性。当LongAdder要获取当前值时，将所有Cell的值于base相加返回即可。
+
+LongAdder维护了一个初始值为null的Cell数组和一个基值变量base。当一开始Cell数组为空且并发线程较少时，仅使用base进行累加。当并发增大时，会动态地增加Cell数组的容量。
+
+Cell类中使用了@sun.misc.Contented注解进行了字节填充，解决了由于连续分布于数组中且被多个线程操作可能造成的**伪共享**问题(关于伪共享，可查看[《伪共享（false sharing），并发编程无声的性能杀手》](https://www.cnblogs.com/cyfonly/p/5800758.html)这篇文章)。
+
+### 源码分析
+
+先看LongAdder的定义
+
+```java
+public class LongAdder extends Striped64 implements Serializable
+```
+
+Striped64类中有如下三个变量：
+```java
+
+transient volatile Cell[] cells;
+
+transient volatile long base;
+
+transient volatile int cellsBusy;
+```
+
+cellsBusy用于实现自旋锁，状态值只有0和1，当创建Cell元素、扩容Cell数组或初始化Cell数组时，使用CAS操作该变量来保证同时只有一个变量可以进行其中之一的操作。
+
+下面看Cell的定义：
+
+```java
+@sun.misc.Contended static final class Cell {
+    volatile long value;
+    Cell(long x) { value = x; }
+    final boolean cas(long cmp, long val) {
+        return UNSAFE.compareAndSwapLong(this, valueOffset, cmp, val);
+    }
+
+    // Unsafe mechanics
+    private static final sun.misc.Unsafe UNSAFE;
+    private static final long valueOffset;
+    static {
+        try {
+            UNSAFE = sun.misc.Unsafe.getUnsafe();
+            Class<?> ak = Cell.class;
+            valueOffset = UNSAFE.objectFieldOffset
+                (ak.getDeclaredField("value"));
+        } catch (Exception e) {
+            throw new Error(e);
+        }
+    }
+}
+```
+
+将value声明伪volatile确保了内存可见性，CAS操作保证了value值的原子性，@sun.misc.Contented注解的使用解决了伪共享问题。
+
+下面来看LongAdder中的几个方法：
+
+- long Sum()
+
+```java
+public long sum() {
+    Cell[] as = cells; Cell a;
+    long sum = base;
+    if (as != null) {
+        for (int i = 0; i < as.length; ++i) {
+            if ((a = as[i]) != null)
+                sum += a.value;
+        }
+    }
+    return sum;
+}
+```
+sum的结果并非一个精确值，因为计算总和时并没有对Cell数组加锁，累加过程中Cell的值可能被更改。
+
+- void reset()
+
+```java
+public void reset() {
+    Cell[] as = cells; Cell a;
+    base = 0L;
+    if (as != null) {
+        for (int i = 0; i < as.length; ++i) {
+            if ((a = as[i]) != null)
+                a.value = 0L;
+        }
+    }
+}
+```
+reset非常简单，将base和Cell数组中非空元素的值置为0.
+
+- long sumThenRest()
+
+```java
+public long sumThenReset() {
+    Cell[] as = cells; Cell a;
+    long sum = base;
+    base = 0L;
+    if (as != null) {
+        for (int i = 0; i < as.length; ++i) {
+            if ((a = as[i]) != null) {
+                sum += a.value;
+                a.value = 0L;
+            }
+        }
+    }
+    return sum;
+}
+```
+sumThenReset同样非常简单，将某个Cell的值加到sum中后随即重置。
+
+- void add(long x)
+
+```java
+public void add(long x) {
+    Cell[] as; long b, v; int m; Cell a;
+    if ((as = cells) != null || !casBase(b = base, b + x)) {
+        boolean uncontended = true;
+        if (as == null || (m = as.length - 1) < 0 ||
+            (a = as[getProbe() & m]) == null ||
+            !(uncontended = a.cas(v = a.value, v + x)))
+            longAccumulate(x, null, uncontended);
+    }
+}
+```
+
+
+
 
 
 
