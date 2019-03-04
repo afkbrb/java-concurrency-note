@@ -23,7 +23,7 @@ public final long decrementAndGet() {
     return unsafe.getAndAddLong(this, valueOffset, -1L) - 1L;
 }
 ```
-上述代码中，valueOffset为AtomicLong在static语句块中进行初始化时通过Unsafe类获得的本类中value属性的内存偏移。
+上述代码中，valueOffset为AtomicLong在static语句块中进行初始化时通过Unsafe类获得的本类中value属性的内存偏移值。
 
 可以看到，上述四个方法都是基于Unsafe类中的getAndAddLong方法实现的。
 
