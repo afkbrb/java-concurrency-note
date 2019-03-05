@@ -206,6 +206,8 @@ sumThenReset同样非常简单，将某个Cell的值加到sum中后随即重置�
 ```java
 public void add(long x) {
     Cell[] as; long b, v; int m; Cell a;
+    // 判断cells是否为空，如果不为空则直接进入内层判断，
+    // 否则尝试通过CAS在base上进行add操作，若CAS成功则结束，否则进入内层。
     if ((as = cells) != null || !casBase(b = base, b + x)) {
         boolean uncontended = true;
         if (as == null || (m = as.length - 1) < 0 ||
@@ -215,6 +217,7 @@ public void add(long x) {
     }
 }
 ```
+
 
 
 
