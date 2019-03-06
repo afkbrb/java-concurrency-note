@@ -299,7 +299,8 @@ final void longAccumulate(long x, LongBinaryOperator fn,
                     cellsBusy = 0;
                 }
                 collide = false;
-                continue; // 扩容后再次尝试（扩容后cells长度改变，根据(n - 1) & h计算当前线程在cells中对应元素下标会变化，减少再次冲突的可能性）
+                continue; // 扩容后再次尝试（扩容后cells长度改变，
+                          // 根据(n - 1) & h计算当前线程在cells中对应元素下标会变化，减少再次冲突的可能性）
             }
             h = advanceProbe(h); // 重新计算线程probe，减小下次访问cells元素时的冲突机会
         }
