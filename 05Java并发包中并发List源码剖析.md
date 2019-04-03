@@ -57,7 +57,7 @@ public CopyOnWriteArrayList(Collection<? extends E> c) {
 }
 ```
 
-关于“c.toArray might (incorrectly) not return Object[] (see 6260652)”的注释可参考[JDK1.6集合框架bug：c.toArray might (incorrectly) not return Object[] (see 6260652)](https://blog.csdn.net/aitangyong/article/details/30274749)。
+关于“c.toArray might (incorrectly) not return Object[] (see 6260652)”的注释可参考[《JDK1.6集合框架bug：c.toArray might (incorrectly) not return Object[] (see 6260652)》](https://blog.csdn.net/aitangyong/article/details/30274749)。
 
 ### 添加元素
 
@@ -142,7 +142,7 @@ public E set(int index, E element) {
 }
 ```
 
-首先获取独占锁，从而阻止其他线程对array数组进行修改，然后获取当前数组，并调用get方法获取指定位置的元素，如果指定位置的元素值与新值不一致就创建新数组并复制元素，然后在新数组上修改指定位置的元素值并设置新数组到array。即使指定位置的元素值与新值一样，为了保证volatile语义，也需要重新设置array（此处可参看[CopyOnWriteArrayList与java内存模型](https://blog.csdn.net/cumtwyc/article/details/52267414)）。
+首先获取独占锁，从而阻止其他线程对array数组进行修改，然后获取当前数组，并调用get方法获取指定位置的元素，如果指定位置的元素值与新值不一致就创建新数组并复制元素，然后在新数组上修改指定位置的元素值并设置新数组到array。即使指定位置的元素值与新值一样，为了保证volatile语义，也需要重新设置array（此处可参看[《CopyOnWriteArrayList与java内存模型》](https://blog.csdn.net/cumtwyc/article/details/52267414)）。
 
 ### 删除元素
 
