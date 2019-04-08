@@ -71,7 +71,7 @@ public static void main(String[] args) throws InterruptedException {
 
 子线程将自己挂起，主线程中调用了unpark方法使得子线程得以继续运行。
 
-###　3. void parkNanos(long nanos)
+### 3. void parkNanos(long nanos)
 
 和park方法类似，如果调用park方法的线程已经拿到了与LockkSupport关联的许可证，则调用LockSupport.parkNanos(long nanos)方法会立即返回。不同之处在于，如果没有拿到许可证，则调用线程会被挂起nanos时间后自动返回。
 
