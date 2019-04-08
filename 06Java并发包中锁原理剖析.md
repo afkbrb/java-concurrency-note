@@ -130,8 +130,8 @@ public final boolean release(int arg) {
     return false;
 }
 ```
-    注意；
-    AQS类并没有提供tryAcquire和tryRelease方法的实现，因为AQS是一个基础框架，这两个方法需要由子类自己实现来实现自己的特性。
+> 注意；
+> AQS类并没有提供tryAcquire和tryRelease方法的实现，因为AQS是一个基础框架，这两个方法需要由子类自己实现来实现自己的特性。
 
 共享方式下，获取和释放资源的流程如下；
 
@@ -156,8 +156,8 @@ public final void acquireShared(int arg) {
     }
 ```
 
-    注意：
-    同上，AQS没有提供tryAcquiredShared和tryReleaseShared方法的实现，这两个方法也需要由子类实现。
+> 注意：
+> 同上，AQS没有提供tryAcquiredShared和tryReleaseShared方法的实现，这两个方法也需要由子类实现。
 
 ### AQS——条件变量的支持
 
@@ -195,8 +195,8 @@ lock.lock()方法相当于进入synchronized同步代码块，用于获取独占
 
 lock.newCondition()作用是new一个在AQS内部类ConditionObject对象。每个条件变量内部都维护了一个条件队列，用来存放调用该条件变量的await方法时被阻塞的线程。
 
-    注意：
-    这个条件队列和AQS队列不是一回事。
+> 注意：
+> 这个条件队列和AQS队列不是一回事。
 
 以下是await的源码：
 
