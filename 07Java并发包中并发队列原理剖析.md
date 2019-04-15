@@ -1,5 +1,23 @@
 # 第7章 Java并发包中并发队列原理剖析
 
+## 目录
+
+- [PriorityBlockingQueue](#priorityblockingqueue)
+    - [类图结构](#类图结构)
+    - [原理讲解](#原理讲解)
+        - [boolean offer()](#boolean-offer)
+        - [E poll()](#e-poll)
+        - [void put(E e)](#void-pute-e)
+        - [E take()](#e-take)
+- [DelayQueue](#delayqueue)
+    - [类图结构](#类图结构-1)
+    - [原理讲解](#原理讲解-1)
+        - [boolean offer(E e)](#boolean-offere-e)
+        - [E take()](#e-take-1)
+        - [E poll()](#e-poll-1)
+        - [int size()](#int-size)
+- [更多](#更多)
+
 LinkedBlockingQueue和ArrayBlockingQueue比较简单，不进行讲解了。下面只介绍PriorityBlockingQueue和DelayQueue。
 
 ## PriorityBlockingQueue
@@ -30,7 +48,7 @@ public PriorityBlockingQueue(int initialCapacity) {
 
 可知默认队列容量为11，默认比较器为null，也就是使用元素的compareTo方法进行比较来确定元素的优先级，这意味着队列元素必须实现Comparable接口。
 
-###　原理介绍
+### 原理讲解
 
 #### boolean offer()
 
@@ -233,6 +251,141 @@ public E take() throws InterruptedException {
 }
 ```
 
+## DelayQueue
 
+DelayQueue并发队列是一个无界阻塞延迟队列，队列中的每一个元素都有一个过期时间，当从队列中获取元素是只有过期元素才会出列。队列头元素是最快要过期的元素。
 
+### 类图结构
 
+![](images/11.png)
+
+DelayQueue内部使用PriorityQueue存放数据，使用ReentrantLock实现线程同步。
+队列里的元素要实现Delayed接口（Delayed接口继承了Comparable接口），用以得到过期时间并进行过期时间的比较。
+
+```java
+public interface Delayed extends Comparable<Delayed> {
+    long getDelay(TimeUnit unit);
+}
+```
+
+available是由lock生成的条件变量，用以实现线程间的同步。
+
+leader是leader-follower模式的变体，用于减少不必要的线程等待。当一个线程调用队列的take方法变为leader线程后，它会调用条件变量available.waitNanos(delay)等待delay时间，但是其他线程（follower）则会调用available.await()进行无限等待。leader线程延迟时间过期后，会退出take方法，并通过调用available.signal()方法唤醒一个follower线程，被唤醒的线程会被选举为新的leader线程。
+
+### 原理讲解
+
+#### boolean offer(E e)
+
+```java
+public boolean offer(E e) {
+    final ReentrantLock lock = this.lock;
+    lock.lock();
+    try {
+        // 添加新元素
+        q.offer(e);
+        // 查看新添加的元素是否为最先过期的
+        if (q.peek() == e) {
+            leader = null;
+            available.signal();
+        }
+        return true;
+    } finally {
+        lock.unlock();
+    }
+}
+```
+
+上述代码首先获取独占锁，然后添加元素到优先级队列，由于q是优先级队列，所以添加元素后，调用q.peek()方法返回的并不一定是当前添加的元素。当如果q.peek() == e，说明当前元素是最先要过期的，那么重置leader线程为null并激活available条件队列里的一个线程，告诉它队列里面有元素了。
+
+#### E take()
+
+获取并移除队列里面过期的元素，如果队列里面没有过期元素则等待。
+
+```java
+public E take() throws InterruptedException {
+    final ReentrantLock lock = this.lock;
+    // 可中断
+    lock.lockInterruptibly();
+    try {
+        for (;;) {
+            E first = q.peek();
+            // 为空则等待
+            if (first == null)
+                available.await();
+            else {
+                long delay = first.getDelay(NANOSECONDS);
+                // 过期则成功获取
+                if (delay <= 0)
+                    return q.poll();
+                // 执行到此处，说明头元素未过期    
+                first = null; // don't retain ref while waiting
+                // follower无限等待，直到被唤醒
+                if (leader != null)
+                    available.await();
+                else {
+                    Thread thisThread = Thread.currentThread();
+                    leader = thisThread;
+                    try {
+                        // leader等待lelay时间，则头元素必定已经过期
+                        available.awaitNanos(delay);
+                    } finally {
+                        // 重置leader，给follower称为leader的机会
+                        if (leader == thisThread)
+                            leader = null;
+                    }
+                }
+            }
+        }
+    } finally {
+        if (leader == null && q.peek() != null)
+            // 唤醒一个follower线程
+            available.signal();
+        lock.unlock();
+    }
+}
+```
+
+一个线程调用take方法时，会首先查看头元素是否为空，为空则直接等待，否则判断是否过期。
+若头元素已经过期，则直接通过poll获取并移除，否则判断是否有leader线程。
+若有leader线程则一直等待，否则自己成为leader并等待头元素过期。
+
+#### E poll()
+
+获取并移除头过期元素，如果没有过期元素则返回null。
+
+```java
+public E poll() {
+    final ReentrantLock lock = this.lock;
+    lock.lock();
+    try {
+        E first = q.peek();
+        // 若队列为空或没有元素过期则直接返回null
+        if (first == null || first.getDelay(NANOSECONDS) > 0)
+            return null;
+        else
+            return q.poll();
+    } finally {
+        lock.unlock();
+    }
+}
+```
+
+#### int size()
+
+计算队列元素个数，包含过期的和未过期的。
+
+```java
+public int size() {
+    final ReentrantLock lock = this.lock;
+    lock.lock();
+    try {
+        return q.size();
+    } finally {
+        lock.unlock();
+    }
+}
+```
+
+## 更多
+
+相关笔记：[《Java并发编程之美》阅读笔记](/README.md)

@@ -22,7 +22,7 @@
 
 - [第6章 Java并发包中锁原理剖析](/06Java并发包中锁原理剖析.md)
 
-- ~~[第7章 Java并发包中并发队列原理剖析](/07Java并发包中并发队列原理剖析.md)~~
+- [第7章 Java并发包中并发队列原理剖析](/07Java并发包中并发队列原理剖析.md)
 
 - ~~[第8章 Java并发包中线程池ThreadPoolExecutor原理探究](/08Java并发包中线程池ThreadPoolExecutor原理探究.md)~~
 
