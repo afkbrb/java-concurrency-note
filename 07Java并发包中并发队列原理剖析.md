@@ -92,7 +92,7 @@ private void tryGrow(Object[] array, int oldCap) {
     // 由前面的代码可知，调用tryGrow函数前先获取了独占锁，
     // 由于扩容比较费时，此处先释放锁，
     // 让其他线程可以继续操作（如果满足可操作的条件的话），
-    // 以并发性能
+    // 以提升并发性能
     lock.unlock();
     Object[] newArray = null;
     // 通过allocationSpinLock保证同时最多只有一个线程进行扩容操作。
