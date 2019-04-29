@@ -1,5 +1,14 @@
 # 第9章 Java并发包中ScheduledThreadPoolExecutor原理探究
 
+## 目录
+
+- [类图结构](#类图结构)
+- [源码分析](#源码分析)
+    - [schedule(Runnable command, long delay, TimeUnit unit)](#schedulerunnable-command-long-delay-timeunit-unit)
+    - [scheduleWithFixedDelay(Runnable command,　long initialDelay,　long delay,　TimeUnit unit)](#schedulewithfixeddelayrunnable-command　long-initialdelay　long-delay　timeunit-unit)
+    - [scheduleAtFixedRate(Runnable command, long initialDelay, long period, TimeUnit unit)](#scheduleatfixedraterunnable-command-long-initialdelay-long-period-timeunit-unit)
+- [更多](#更多)
+
 ## 类图结构
 
 ScheduledThreadPoolExecutor时一个可以在指定一定延迟时间后或者定时进行任务调度执行的线程池。
@@ -61,7 +70,7 @@ public ScheduledThreadPoolExecutor(int corePoolSize,
 
 从上面的代码中可以看到，ScheduledThreadPoolExecutor的线程池队列为DelayedWorkQueue。
 
-##　源码分析
+## 源码分析
 
 ### schedule(Runnable command, long delay, TimeUnit unit)
 
@@ -95,7 +104,7 @@ ScheduledFutureTask(Runnable r, V result, long ns) {
 }
 
 public FutureTask(Runnable runnable, V result) {
-    // 将runnable任务转化成callable任务
+    // 将Runnable任务转化成Callable任务
     this.callable = Executors.callable(runnable, result);
     this.state = NEW;       // ensure visibility of callable
 }
@@ -173,7 +182,7 @@ public void run() {
     else if (ScheduledFutureTask.super.runAndReset()) {
         // 设置下次执行的时间
         setNextRunTime();
-        // outerTask = this就是当前对象
+        // 默认情况下，outerTask = this就是当前对象
         reExecutePeriodic(outerTask);
     }
 }
@@ -207,7 +216,7 @@ void reExecutePeriodic(RunnableScheduledFuture<?> task) {
 }
 ```
 
-###　scheduleWithFixedDelay(Runnable command,　long initialDelay,　long delay,　TimeUnit unit)
+### scheduleWithFixedDelay(Runnable command,　long initialDelay,　long delay,　TimeUnit unit)
 
 当任务执行完毕后，让其延迟固定时间后再次运行。
 
@@ -277,3 +286,7 @@ public ScheduledFuture<?> scheduleAtFixedRate(Runnable command,
 ```
 
 除了设置period的值大于0外，总体与scheduleWithFixedDelay类似，不再赘述。
+
+## 更多
+
+相关笔记：[《Java并发编程之美》阅读笔记](/README.md)
