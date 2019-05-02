@@ -1,5 +1,33 @@
 # 第10章 Java并发包中线程同步器原理剖析
 
+## 目录
+
+- [CountDownLatch原理剖析](#countdownlatch原理剖析)
+    - [示例](#示例)
+    - [类图结构](#类图结构)
+    - [源码解析](#源码解析)
+        - [void await()](#void-await)
+        - [boolean await(long timeout, TimeUnit unit)](#boolean-awaitlong-timeout-timeunit-unit)
+        - [void countDown()](#void-countdown)
+- [CyclicBarrier原理探究](#cyclicbarrier原理探究)
+    - [示例](#示例-1)
+    - [类图结构](#类图结构-1)
+    - [源码分析](#源码分析)
+        - [int await()](#int-await)
+        - [boolean await(long timeout, TimeUnit unit)](#boolean-awaitlong-timeout-timeunit-unit-1)
+        - [int dowait(boolean timed, long nanos)](#int-dowaitboolean-timed-long-nanos)
+- [Semaphore原理探究](#semaphore原理探究)
+    - [示例](#示例-2)
+    - [类图结构](#类图结构-2)
+    - [源码解析](#源码解析-1)
+        - [void acquire()](#void-acquire)
+        - [void acquire(int permits)](#void-acquireint-permits)
+        - [void acquireUninterruptibly()](#void-acquireuninterruptibly)
+        - [void acquireUninterruptibly(int permits)](#void-acquireuninterruptiblyint-permits)
+        - [void release()](#void-release)
+        - [void release(int permits)](#void-releaseint-permits)
+- [更多](#更多)
+
 ## CountDownLatch原理剖析
 
 日常开发中经常遇到一个线程需要等待一些线程都结束后才能继续向下运行的场景，在CountDownLatch出现之前通常使用join方法来实现，但join方法不够灵活，所以开发了CountDownLatch。
@@ -410,5 +438,185 @@ private void nextGeneration() {
 }
 ```
 
+## Semaphore原理探究
 
+Semaphore信号量也是一个同步器，与CountDownLatch和CyclicBarrier不同的是，它内部的计数器是递增的，并且在初始化时可以指定计数器的初始值（通常为0），但不必知道需要同步的线程个数，而是在需要同步的地方调用acquire方法时指定需要同步的线程个数。
 
+### 示例
+
+```java
+public static void main(String[] args) throws InterruptedException {
+    final int THREAD_COUNT = 2;
+    // 初始信号量为0
+    Semaphore semaphore = new Semaphore(0);
+    ExecutorService executorService = Executors.newFixedThreadPool(THREAD_COUNT);
+
+    for (int i = 0; i < THREAD_COUNT; i++){
+        executorService.execute(new Runnable() {
+            @Override
+            public void run() {
+                System.out.println(Thread.currentThread() + " over");
+                // 信号量+1
+                semaphore.release();
+            }
+        });
+    }
+
+    // 当信号量达到2时才停止阻塞
+    semaphore.acquire(2);
+    System.out.println("all child thread over!");
+
+    executorService.shutdown();
+}
+```
+
+### 类图结构
+
+![](images/16.png)
+
+由图可知，Semaphore还是使用AQS实现的，并且可以选取公平性策略（默认为非公平性的）。
+
+### 源码解析
+
+#### void acquire()
+
+表示当前线程希望获取一个信号量资源，如果当前信号量大于0，则当前信号量的计数减1，然后该方法直接返回。否则如果当前信号量等于0，则被阻塞。
+
+```java
+public void acquire() throws InterruptedException {
+    sync.acquireSharedInterruptibly(1);
+}
+
+public final void acquireSharedInterruptibly(int arg)
+        throws InterruptedException {
+    // 可以被中断
+    if (Thread.interrupted())
+        throw new InterruptedException();
+    // 调用Sync子类方法尝试获取，这里根据构造函数决定公平策略
+    if (tryAcquireShared(arg) < 0)
+        // 将当前线程放入阻塞队列，然后再次尝试
+        // 如果失败则挂起当前线程
+        doAcquireSharedInterruptibly(arg);
+}
+```
+
+tryAcquireShared由Sync的子类实现以根据公平性采取相应的行为。
+
+以下是非公平策略NofairSync的实现:
+
+```java
+protected int tryAcquireShared(int acquires) {
+    return nonfairTryAcquireShared(acquires);
+}
+
+final int nonfairTryAcquireShared(int acquires) {
+    for (;;) {
+        int available = getState();
+        int remaining = available - acquires;
+        // 如果剩余信号量小于0直接返回
+        // 否则如果更新信号量成功则返回
+        if (remaining < 0 ||
+            compareAndSetState(available, remaining))
+            return remaining;
+    }
+}
+```
+
+假设线程A调用了acquire方法尝试获取信号量但因信号量不足被阻塞，这时线程B通过release增加了信号量，此时线程C完全可以调用acquire方法成功获取到信号量（如果信号量足够的话），这就是非公平性的体现。
+
+下面是公平性的实现：
+
+```java
+protected int tryAcquireShared(int acquires) {
+    for (;;) {
+        // 关键在于先判断AQS队列中是否已经有元素要获取信号量
+        if (hasQueuedPredecessors())
+            return -1;
+        int available = getState();
+        int remaining = available - acquires;
+        if (remaining < 0 ||
+            compareAndSetState(available, remaining))
+            return remaining;
+    }
+}
+```
+
+hasQueuedPredecessors方法（可参看[第6章 Java并发包中锁原理剖析](/06Java并发包中锁原理剖析.md)）用于判断当前线程的前驱节点是否也在等待获取该资源，如果是则自己放弃获取的权限，然后当前线程会被放入AQS中，否则尝试去获取。
+
+#### void acquire(int permits)
+
+可获取多个信号量。
+
+```java
+public void acquire(int permits) throws InterruptedException {
+    if (permits < 0) throw new IllegalArgumentException();
+    sync.acquireSharedInterruptibly(permits);
+}
+```
+
+#### void acquireUninterruptibly()
+
+不对中断进行响应。
+
+```java
+public void acquireUninterruptibly() {
+    sync.acquireShared(1);
+}
+```
+
+#### void acquireUninterruptibly(int permits)
+
+不对中断进行相应并且可获取多个信号量。
+
+```java
+public void acquireUninterruptibly(int permits) {
+    if (permits < 0) throw new IllegalArgumentException();
+    sync.acquireShared(permits);
+}
+```
+
+#### void release()
+
+使信号量加1，如果当前有线程因为调用acquire方法被阻塞而被放入AQS中的话，会根据公平性策略选择一个信号量个数能被满足的线程进行激活。
+
+```java
+public void release() {
+    sync.releaseShared(1);
+}
+
+public final boolean releaseShared(int arg) {
+    // 尝试释放资源（增加信号量）
+    if (tryReleaseShared(arg)) {
+        // 释放资源成功则根据公平性策略唤醒AQS中阻塞的线程
+        doReleaseShared();
+        return true;
+    }
+    return false;
+}
+
+protected final boolean tryReleaseShared(int releases) {
+    for (;;) {
+        int current = getState();
+        int next = current + releases;
+        if (next < current) // overflow
+            throw new Error("Maximum permit count exceeded");
+        if (compareAndSetState(current, next))
+            return true;
+    }
+}
+```
+
+#### void release(int permits)
+
+可增加多个信号量。
+
+```java
+public void release(int permits) {
+    if (permits < 0) throw new IllegalArgumentException();
+    sync.releaseShared(permits);
+}
+```
+
+## 更多
+
+相关笔记：[《Java并发编程之美》阅读笔记](/README.md)

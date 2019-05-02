@@ -28,7 +28,7 @@
 
 - [第9章 Java并发包中ScheduledThreadPoolExecutor原理探究](/09Java并发包中ScheduledThreadPoolExecutor原理探究.md)
 
-- ~~[第10章 Java并发包中线程同步器原理剖析](/10Java并发包中线程同步器原理剖析.md)~~
+- [第10章 Java并发包中线程同步器原理剖析](/10Java并发包中线程同步器原理剖析.md)
 
 #### 🚩第三部分 Java并发编程实践篇
 
